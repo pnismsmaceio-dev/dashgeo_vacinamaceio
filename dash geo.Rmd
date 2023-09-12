@@ -1,0 +1,876 @@
+---
+title: "Microplanejamento - Vacina Maceió"
+subtitle: "Georreferenciamento e dados da vacinação de Maceió"
+output: 
+  flexdashboard::flex_dashboard:        # insere menu de compartilhamento
+    source_code: embed   # disponibiliza o código
+    orientation: columns
+    vertical_layout: fill
+  runtime: shiny
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(tidyverse)
+library(leaflet)
+
+
+doses_georef <- read_csv("Doses para georef - doses_georef.csv", na = "-")
+
+cob_distritos <- read_csv("cob_distritos.csv")
+
+cob_22_23 <- read.csv("cob_22_23.csv")
+
+cob_geral <- read.csv('cob_geral.csv')
+
+lista <- tibble(sort(paste(unique(doses_georef$ds),sep = ",")))
+
+pallette <- colorFactor(palette = c("orange","steelblue","red","blue","#f01f73",
+                                     "green","purple","yellow","grey","white",
+                                     "brown","beige","black", "black"),
+                        levels = c("1º distrito","2º distrito","3º distrito",
+                        "4º distrito","5º distrito","6º distrito",
+                        "7º distrito","8º distrito","Clínicas privadas",
+                        "Distrito sanitário","Maternidades","Upas","-",NA)
+)
+
+pallette2 <- colorFactor(palette = c("white",
+                                     "brown","beige","black", "black"),
+                        levels = c("Clínicas privadas",
+                        "Distrito sanitário","Maternidades","Upas","-",NA) )
+  
+  
+ds <-doses_georef$ds
+
+no_unidade <- c(ds == "Clínicas privadas"&ds == "Distrito sanitário"&
+                ds == "Maternidades"&ds == "Upas"&ds == "-"&ds == NA)
+
+```
+# Geral (set 21 à mar 23)
+
+## Column {data-width="650"}
+
+### Mapa de distribuição de doses
+
+```{r}
+
+## leaflet de base para apresentação
+
+
+## criando arquivo para leitura pelo leaflet
+doses_georef <- doses_georef |>
+  select(lat,long,`nome google`,ds,n) |>
+  group_by(lat,long,`nome google`,ds) |>
+  summarise(
+    "n" = sum(n)
+  )|>
+  mutate(lat = as.numeric(lat),
+         long = as.numeric(long),
+         "tag" = paste(`nome google`,ds,
+                       paste("Nº de doses:",n,sep = " "),
+                       sep = "
+                       "))
+
+doses_georef <- doses_georef
+
+leaflet() |>
+  addTiles() |>
+  addCircles(
+    lng = doses_georef$long, lat = doses_georef$lat,
+    label = doses_georef$tag,
+    fillOpacity = 0.4,
+    opacity = 0.6,
+    labelOptions = labelOptions(noHide = F),
+    weight = 12, radius = doses_georef$n / 50,
+    color = pallette(doses_georef$ds) ) |>
+  addMarkers(
+    lat = cob_distritos$long,
+    lng = cob_distritos$lat,
+    popup = cob_distritos$text
+  ) |>
+  addLegend("bottomright",
+            pal = pallette,
+            values = doses_georef$ds,
+            title = "Distritos",
+            opacity = 0.7)
+
+```
+## Column
+
+### Doses por unidade
+
+```{r}
+doses_georef |>
+  select(`nome google`,ds,n) |>
+  group_by(`nome google`,ds) |>
+  summarise(
+    "Nº de doses" = sum(n)
+  )|>
+  arrange(ds) |>
+  rename("Nome da unidade" = `nome google`,
+         "Distrito Sanitário" = ds)|>
+  knitr::kable()
+```
+### Cobertura geral 2022 - 2023
+
+```{r}
+cob_geral <- cob_geral %>%
+  rename("2022(%)" = X2022...,
+         "03-2023(%)" = X03.2023...,
+         "04-2023(%)" = X04.2023...)
+
+knitr::kable(cob_geral)
+```
+
+# 1º distrito
+
+## Column
+
+### Mapa de distribuição unidades
+``` {r}
+doses_georef <- doses_georef |>
+  select(lat,long,`nome google`,ds,n) |>
+  group_by(lat,long,`nome google`,ds) |>
+  summarise(
+    "n" = sum(n)
+  )|>
+  mutate(lat = as.numeric(lat),
+         long = as.numeric(long),
+         "tag" = paste(`nome google`,ds,
+                       paste("Nº de doses:",n,sep = " "),
+                       sep = "
+                       ")
+  )
+
+doses_georef_ds1 <- doses_georef |>
+  filter(ds == "1º distrito")
+
+mapads1 <- leaflet() |>
+  addTiles() |>
+  addCircles(
+    lng = doses_georef_ds1$long, 
+    lat = doses_georef_ds1$lat,
+    label = doses_georef_ds1$tag,
+    labelOptions = labelOptions(noHide = F),
+    weight = 12, radius = doses_georef_ds1$n / 50,
+    color = "orange" ) |>
+  addMarkers(data = cob_distritos %>%
+               filter(ds == "1º distrito"),
+    lat = ~long,
+    lng = ~lat,
+    popup = ~text
+  )
+
+mapads1
+```
+
+## Column
+
+### Doses por unidade
+
+```{r}
+doses_georef |>
+  select(`nome google`,ds,n) |>
+  filter(ds == "1º distrito")|>
+  group_by(`nome google`,ds) |>
+  summarise(
+    "Nº de doses" = sum(n)
+  )|>
+  arrange(ds) |>
+  rename("Nome da unidade" = `nome google`,
+         "Distrito Sanitário" = ds)|>
+  knitr::kable()
+```
+
+### Cobertura 2023
+
+```{r}
+cob_22_23 |>
+  filter(ano == 2023 & ds == "1º distrito") |>
+  select(Vacinas,Nº.Doses,Cob.. )|>
+  rename("Nº de doses" = Nº.Doses,
+         "Cob(%)" = Cob..)|>
+  knitr::kable()
+  
+```
+### Cobertura 2022
+
+```{r}
+cob_22_23 |>
+  filter(ano == 2022 & ds == "1º distrito") |>
+  select(Vacinas,Nº.Doses,Cob.. )|>
+  rename("Nº de doses" = Nº.Doses,
+         "Cob(%)" = Cob..)|>
+  knitr::kable()
+  
+```
+
+# 2º distrito
+
+## Column
+
+### Mapa de distribuição unidades
+
+``` {r}
+
+doses_georef <- doses_georef |>
+  select(lat,long,`nome google`,ds,n) |>
+  group_by(lat,long,`nome google`,ds) |>
+  summarise(
+    "n" = sum(n)
+  )|>
+  mutate(lat = as.numeric(lat),
+         long = as.numeric(long),
+         "tag" = paste(`nome google`,ds,
+                       paste("Nº de doses:",n,sep = " "),
+                       sep = "
+                       ")
+  )
+
+doses_georef_ds2 <- doses_georef |>
+  filter(ds == "2º distrito")
+
+mapads2 <- leaflet() |>
+  addTiles() |>
+  addCircles(
+    lng = doses_georef_ds2$long, 
+    lat = doses_georef_ds2$lat,
+    label = doses_georef_ds2$tag,
+    labelOptions = labelOptions(noHide = F),
+    weight = 12, radius = doses_georef_ds2$n / 50,
+    color = "steelblue" ) |>
+  addMarkers(data = cob_distritos %>%
+               filter(ds == "2º distrito"),
+    lat = ~long,
+    lng = ~lat,
+    popup = ~text
+  )
+
+mapads2
+```
+## Column
+
+### Doses por unidade
+
+```{r}
+doses_georef |>
+  select(`nome google`,ds,n) |>
+  filter(ds == "2º distrito")|>
+  group_by(`nome google`,ds) |>
+  summarise(
+    "Nº de doses" = sum(n)
+  )|>
+  arrange(ds) |>
+  rename("Nome da unidade" = `nome google`,
+         "Distrito Sanitário" = ds)|>
+  knitr::kable()
+```
+
+
+### Cobertura 2023
+
+```{r}
+cob_22_23 |>
+  filter(ano == 2023 & ds == "2º distrito") |>
+  select(Vacinas,Nº.Doses,Cob.. )|>
+  rename("Nº de doses" = Nº.Doses,
+         "Cob(%)" = Cob..)|>
+  knitr::kable()
+  
+```
+
+
+### Cobertura 2022
+
+```{r}
+cob_22_23 |>
+  filter(ano == 2022 & ds == "2º distrito") |>
+  select(Vacinas,Nº.Doses,Cob.. )|>
+  rename("Nº de doses" = Nº.Doses,
+         "Cob(%)" = Cob..)|>
+  knitr::kable()
+  
+```
+
+
+# 3º distrito
+## Column
+
+### Mapa de distribuição unidades
+``` {r}
+
+doses_georef <- doses_georef |>
+  select(lat,long,`nome google`,ds,n) |>
+  group_by(lat,long,`nome google`,ds) |>
+  summarise(
+    "n" = sum(n)
+  )|>
+  mutate(lat = as.numeric(lat),
+         long = as.numeric(long),
+         "tag" = paste(`nome google`,ds,
+                       paste("Nº de doses:",n,sep = " "),
+                       sep = "
+                       ")
+  )
+doses_georef_ds3 <- doses_georef |>
+  filter(ds == "3º distrito")
+
+mapads3 <- leaflet() |>
+  addTiles() |>
+  addCircles(
+    lng = doses_georef_ds3$long, 
+    lat = doses_georef_ds3$lat,
+    label = doses_georef_ds3$tag,
+    labelOptions = labelOptions(noHide = F),
+    weight = 12, radius = doses_georef_ds3$n / 50,
+    color = "red" ) |>
+  addMarkers(data = cob_distritos %>%
+               filter(ds == "3º distrito"),
+    lat = ~long,
+    lng = ~lat,
+    popup = ~text
+  )
+
+mapads3
+```
+
+## Column
+
+### Doses por unidade
+
+```{r}
+doses_georef |>
+  select(`nome google`,ds,n) |>
+  filter(ds == "3º distrito")|>
+  group_by(`nome google`,ds) |>
+  summarise(
+    "Nº de doses" = sum(n)
+  )|>
+  arrange(ds) |>
+  rename("Nome da unidade" = `nome google`,
+         "Distrito Sanitário" = ds)|>
+  knitr::kable()
+```
+
+
+### Cobertura 2023
+
+```{r}
+cob_22_23 |>
+  filter(ano == 2023 & ds == "3º distrito") |>
+  select(Vacinas,Nº.Doses,Cob.. )|>
+  rename("Nº de doses" = Nº.Doses,
+         "Cob(%)" = Cob..)|>
+  knitr::kable()
+  
+```
+
+
+### Cobertura 2022
+
+```{r}
+cob_22_23 |>
+  filter(ano == 2022 & ds == "3º distrito") |>
+  select(Vacinas,Nº.Doses,Cob.. )|>
+  rename("Nº de doses" = Nº.Doses,
+         "Cob(%)" = Cob..)|>
+  knitr::kable()
+  
+```
+
+
+# 4º distrito
+## Column
+
+### Mapa de distribuição unidades
+``` {r}
+
+doses_georef <- doses_georef |>
+  select(lat,long,`nome google`,ds,n) |>
+  group_by(lat,long,`nome google`,ds) |>
+  summarise(
+    "n" = sum(n)
+  )|>
+  mutate(lat = as.numeric(lat),
+         long = as.numeric(long),
+         "tag" = paste(`nome google`,ds,
+                       paste("Nº de doses:",n,sep = " "),
+                       sep = "
+                       ")
+  )
+
+doses_georef_ds4 <- doses_georef |>
+  filter(ds == "4º distrito")
+
+mapads4 <- leaflet() |>
+  addTiles() |>
+  addCircles(
+    lng = doses_georef_ds4$long, 
+    lat = doses_georef_ds4$lat,
+    label = doses_georef_ds4$tag,
+    labelOptions = labelOptions(noHide = F),
+    weight = 12, radius = doses_georef_ds4$n / 50,
+    color = "blue" ) |>
+  addMarkers(data = cob_distritos %>%
+               filter(ds == "4º distrito"),
+    lat = ~long,
+    lng = ~lat,
+    popup = ~text
+  )
+
+mapads4
+
+```
+## Column
+
+### Doses por unidade
+
+```{r}
+doses_georef |>
+  select(`nome google`,ds,n) |>
+  filter(ds == "4º distrito")|>
+  group_by(`nome google`,ds) |>
+  summarise(
+    "Nº de doses" = sum(n)
+  )|>
+  arrange(ds) |>
+  rename("Nome da unidade" = `nome google`,
+         "Distrito Sanitário" = ds)|>
+  knitr::kable()
+```
+
+
+### Cobertura 2023
+
+```{r}
+cob_22_23 |>
+  filter(ano == 2023 & ds == "4º distrito") |>
+  select(Vacinas,Nº.Doses,Cob.. )|>
+  rename("Nº de doses" = Nº.Doses,
+         "Cob(%)" = Cob..)|>
+  knitr::kable()
+  
+```
+
+
+### Cobertura 2022
+
+```{r}
+cob_22_23 |>
+  filter(ano == 2022 & ds == "4º distrito") |>
+  select(Vacinas,Nº.Doses,Cob.. )|>
+  rename("Nº de doses" = Nº.Doses,
+         "Cob(%)" = Cob..)|>
+  knitr::kable()
+  
+```
+
+
+
+# 5º distrito
+## Column
+
+### Mapa de distribuição unidades
+``` {r}
+
+doses_georef <- doses_georef |>
+  select(lat,long,`nome google`,ds,n) |>
+  group_by(lat,long,`nome google`,ds) |>
+  summarise(
+    "n" = sum(n)
+  )|>
+  mutate(lat = as.numeric(lat),
+         long = as.numeric(long),
+         "tag" = paste(`nome google`,ds,
+                       paste("Nº de doses:",n,sep = " "),
+                       sep = "
+                       ")
+  )
+
+doses_georef_ds5 <- doses_georef |>
+  filter(ds == "5º distrito")
+
+mapads5 <- leaflet() |>
+  addTiles() |>
+  addCircles(
+    lng = doses_georef_ds5$long, 
+    lat = doses_georef_ds5$lat,
+    label = doses_georef_ds5$tag,
+    labelOptions = labelOptions(noHide = F),
+    weight = 12, radius = doses_georef_ds5$n / 50,
+    color = "#f01f73" ) |>
+  addMarkers(data = cob_distritos %>%
+               filter(ds == "5º distrito"),
+    lat = ~long,
+    lng = ~lat,
+    popup = ~text
+  ) 
+mapads5
+```
+
+## Column
+
+### Doses por unidade
+
+```{r}
+doses_georef |>
+  select(`nome google`,ds,n) |>
+  filter(ds == "5º distrito")|>
+  group_by(`nome google`,ds) |>
+  summarise(
+    "Nº de doses" = sum(n)
+  )|>
+  arrange(ds) |>
+  rename("Nome da unidade" = `nome google`,
+         "Distrito Sanitário" = ds)|>
+  knitr::kable()
+```
+
+
+### Cobertura 2023
+
+```{r}
+cob_22_23 |>
+  filter(ano == 2023 & ds == "5º distrito") |>
+  select(Vacinas,Nº.Doses,Cob.. )|>
+  rename("Nº de doses" = Nº.Doses,
+         "Cob(%)" = Cob..)|>
+  knitr::kable()
+  
+```
+
+
+### Cobertura 2022
+
+```{r}
+cob_22_23 |>
+  filter(ano == 2022 & ds == "5º distrito") |>
+  select(Vacinas,Nº.Doses,Cob.. )|>
+  rename("Nº de doses" = Nº.Doses,
+         "Cob(%)" = Cob..)|>
+  knitr::kable()
+  
+```
+
+
+
+# 6º distrito
+
+## Column
+
+### Mapa de distribuição unidades
+``` {r}
+
+doses_georef <- doses_georef |>
+  select(lat,long,`nome google`,ds,n) |>
+  group_by(lat,long,`nome google`,ds) |>
+  summarise(
+    "n" = sum(n)
+  )|>
+  mutate(lat = as.numeric(lat),
+         long = as.numeric(long),
+         "tag" = paste(`nome google`,ds,
+                       paste("Nº de doses:",n,sep = " "),
+                       sep = "
+                       ")
+  )
+
+doses_georef_ds6 <- doses_georef |>
+  filter(ds == "6º distrito")
+
+mapads6 <- leaflet() |>
+  addTiles() |>
+  addCircles(
+    lng = doses_georef_ds6$long, 
+    lat = doses_georef_ds6$lat,
+    label = doses_georef_ds6$tag,
+    labelOptions = labelOptions(noHide = F),
+    weight = 12, radius = doses_georef_ds6$n / 50,
+    color = "green" )  |>
+  addMarkers(data = cob_distritos %>%
+               filter(ds == "6º distrito"),
+    lat = ~long,
+    lng = ~lat,
+    popup = ~text
+  )
+mapads6
+```
+
+## Column
+
+### Doses por unidade
+
+```{r}
+doses_georef |>
+  select(`nome google`,ds,n) |>
+  filter(ds == "6º distrito")|>
+  group_by(`nome google`,ds) |>
+  summarise(
+    "Nº de doses" = sum(n)
+  )|>
+  arrange(ds) |>
+  rename("Nome da unidade" = `nome google`,
+         "Distrito Sanitário" = ds)|>
+  knitr::kable()
+```
+
+
+### Cobertura 2023
+
+```{r}
+cob_22_23 |>
+  filter(ano == 2023 & ds == "6º distrito") |>
+  select(Vacinas,Nº.Doses,Cob.. )|>
+  rename("Nº de doses" = Nº.Doses,
+         "Cob(%)" = Cob..)|>
+  knitr::kable()
+  
+```
+
+
+### Cobertura 2022
+
+```{r}
+cob_22_23 |>
+  filter(ano == 2022 & ds == "6º distrito") |>
+  select(Vacinas,Nº.Doses,Cob.. )|>
+  rename("Nº de doses" = Nº.Doses,
+         "Cob(%)" = Cob..)|>
+  knitr::kable()
+  
+```
+
+
+
+
+# 7º distrito
+## Column
+
+### Mapa de distribuição unidades
+
+``` {r}
+
+doses_georef <- doses_georef |>
+  select(lat,long,`nome google`,ds,n) |>
+  group_by(lat,long,`nome google`,ds) |>
+  summarise(
+    "n" = sum(n)
+  )|>
+  mutate(lat = as.numeric(lat),
+         long = as.numeric(long),
+         "tag" = paste(`nome google`,ds,
+                       paste("Nº de doses:",n,sep = " "),
+                       sep = "
+                       ")
+  )
+
+doses_georef_ds7 <- doses_georef |>
+  filter(ds == "7º distrito")
+
+mapads7 <- leaflet() |>
+  addTiles() |>
+  addCircles(
+    lng = doses_georef_ds7$long, 
+    lat = doses_georef_ds7$lat,
+    label = doses_georef_ds7$tag,
+    labelOptions = labelOptions(noHide = F),
+    weight = 12, radius = doses_georef_ds7$n / 50,
+    color = "purple" ) |>
+  addMarkers(data = cob_distritos %>%
+               filter(ds == "7º distrito"),
+    lat = ~long,
+    lng = ~lat,
+    popup = ~text
+  )
+mapads7
+```
+
+## Column
+
+### Doses por unidade
+
+```{r}
+doses_georef |>
+  select(`nome google`,ds,n) |>
+  filter(ds == "7º distrito")|>
+  group_by(`nome google`,ds) |>
+  summarise(
+    "Nº de doses" = sum(n)
+  )|>
+  arrange(ds) |>
+  rename("Nome da unidade" = `nome google`,
+         "Distrito Sanitário" = ds)|>
+  knitr::kable()
+```
+
+
+### Cobertura 2023
+
+```{r}
+cob_22_23 |>
+  filter(ano == 2023 & ds == "7º distrito") |>
+  select(Vacinas,Nº.Doses,Cob.. )|>
+  rename("Nº de doses" = Nº.Doses,
+         "Cob(%)" = Cob..)|>
+  knitr::kable()
+  
+```
+
+
+### Cobertura 2022
+
+```{r}
+cob_22_23 |>
+  filter(ano == 2022 & ds == "7º distrito") |>
+  select(Vacinas,Nº.Doses,Cob.. )|>
+  rename("Nº de doses" = Nº.Doses,
+         "Cob(%)" = Cob..)|>
+  knitr::kable()
+  
+```
+
+
+
+# 8º distrito
+
+## Column
+
+### Mapa de distribuição unidades
+
+``` {r}
+
+doses_georef <- doses_georef |>
+  select(lat,long,`nome google`,ds,n) |>
+  group_by(lat,long,`nome google`,ds) |>
+  summarise(
+    "n" = sum(n)
+  )|>
+  mutate(lat = as.numeric(lat),
+         long = as.numeric(long),
+         "tag" = paste(`nome google`,ds,
+                       paste("Nº de doses:",n,sep = " "),
+                       sep = "
+                       ")
+  )
+
+doses_georef_ds8 <- doses_georef |>
+  filter(ds == "8º distrito")
+
+mapads8 <- leaflet() |>
+  addTiles() |>
+  addCircles(
+    lng = doses_georef_ds8$long, 
+    lat = doses_georef_ds8$lat,
+    label = doses_georef_ds8$tag,
+    labelOptions = labelOptions(noHide = F),
+    weight = 12, radius = doses_georef_ds8$n / 50,
+    color = "yellow" ) |>
+  addMarkers(data = cob_distritos %>%
+               filter(ds == "8º distrito"),
+    lat = ~long,
+    lng = ~lat,
+    popup = ~text
+  )
+mapads8
+```
+## Column
+
+### Doses por unidade
+
+```{r}
+doses_georef |>
+  select(`nome google`,ds,n) |>
+  filter(ds == "8º distrito")|>
+  group_by(`nome google`,ds) |>
+  summarise(
+    "Nº de doses" = sum(n)
+  )|>
+  arrange(ds) |>
+  rename("Nome da unidade" = `nome google`,
+         "Distrito Sanitário" = ds)|>
+  knitr::kable()
+```
+
+
+### Cobertura 2023
+
+```{r}
+cob_22_23 |>
+  filter(ano == 2023 & ds == "8º distrito") |>
+  select(Vacinas,Nº.Doses,Cob.. )|>
+  rename("Nº de doses" = Nº.Doses,
+         "Cob(%)" = Cob..)|>
+  knitr::kable()
+  
+```
+
+
+### Cobertura 2022
+
+```{r}
+cob_22_23 |>
+  filter(ano == 2022 & ds == "8º distrito") |>
+  select(Vacinas,Nº.Doses,Cob.. )|>
+  rename("Nº de doses" = Nº.Doses,
+         "Cob(%)" = Cob..)|>
+  knitr::kable()
+  
+```
+
+# Outros ES
+
+## Column
+
+### Mapa de distribuição de outros estabelecimentos de saúde
+``` {r}
+doses_georef <- doses_georef |>
+  select(lat,long,`nome google`,ds,n) |>
+  group_by(lat,long,`nome google`,ds) |>
+  summarise(
+    "n" = sum(n)
+  )|>
+  mutate(lat = as.numeric(lat),
+         long = as.numeric(long),
+         "tag" = paste(`nome google`,ds,
+                       paste("Nº de doses:",n,sep = " "),
+                       sep = "
+                       ")
+  )
+
+doses_georef_ds1 <- doses_georef |>
+  filter(ds == "Clínicas privadas" | ds == "Distrito sanitário" |
+                ds == "Maternidades" | ds == "Upas" | ds == "-" | ds == is.na(ds))
+
+mapads1 <- leaflet() |>
+  addTiles() |>
+  addCircles(
+    lng = doses_georef_ds1$long, 
+    lat = doses_georef_ds1$lat,
+    label = doses_georef_ds1$tag,
+    labelOptions = labelOptions(noHide = F),
+    fillOpacity = 0.5,
+    opacity = 1,
+    weight = 8, radius = doses_georef_ds1$n / 35,
+    color = pallette2(doses_georef_ds1$ds) )
+
+mapads1
+```
+
+## Column
+
+### Doses por unidade
+
+```{r}
+doses_georef |>
+  select(`nome google`,ds,n) |>
+  filter(ds == "Clínicas privadas" | ds == "Distrito sanitário" |
+                ds == "Maternidades" | ds == "Upas" | ds == "-" | ds == is.na(ds))|>
+  group_by(`nome google`,ds) |>
+  summarise(
+    "Nº de doses" = sum(n)
+  )|>
+  arrange(ds) |>
+  rename("Nome da unidade" = `nome google`,
+         "Distrito Sanitário" = ds)|>
+  knitr::kable()
+```
